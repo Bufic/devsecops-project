@@ -1,5 +1,10 @@
 pipeline {
-    agent { docker { image 'node:20' } }
+    agent { 
+        docker { 
+            image 'node:20' 
+            args '-u root' // Run as root to avoid permission issues
+          } 
+        }
 
     environment {
         REGISTRY = 'ghcr.io'
