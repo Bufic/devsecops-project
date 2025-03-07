@@ -24,10 +24,15 @@ pipeline {
                     tar -xzf node.tar.gz -C /usr/local --strip-components=1
                     rm node.tar.gz
 
+                    # Debug: List contents of /usr/local/bin
+                    echo "Contents of /usr/local/bin:"
+                    ls -l /usr/local/bin
+
                     # Add Node.js to PATH
                     export PATH="/usr/local/bin:$PATH"
 
                     # Verify Node.js installation
+                    echo "PATH: $PATH"
                     node -v
                     npm -v
 
