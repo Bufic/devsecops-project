@@ -13,30 +13,27 @@ pipeline {
             }
         }
 
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm ci'
+            }
+        }
+
         stage('Unit Testing') {
             steps {
-                sh '''
-                    npm ci
-                    npm test || echo "No tests found, would add tests in a real project"
-                '''
+                sh 'npm test'
             }
         }
 
         stage('Static Code Analysis') {
             steps {
-                sh '''
-                    npm ci
-                    npm run lint
-                '''
+                sh 'npm run lint'
             }
         }
 
         stage('Build Project') {
             steps {
-                sh '''
-                    npm ci
-                    npm run build
-                '''
+                sh 'npm run build'
                 archiveArtifacts artifacts: 'dist/', fingerprint: true
             }
         }
@@ -50,12 +47,12 @@ pipeline {
                         '''
                     }
 
-                    def imageTag = "sha-${env.GIT_COMMIT}"
+                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
                         docker build -t ${fullImageName} .
-                        trivy image --ignore-unfixed --severity CRITICAL,HIGH ${fullImageName} || echo "Trivy found vulnerabilities, continuing..."
+                        trivy image --ignore-unfixed --severity CRITICAL,HIGH ${fullImageName} || { echo "Critical or High vulnerabilities found!"; exit 1; }
                         docker push ${fullImageName}
                     """
                 }
@@ -68,7 +65,7 @@ pipeline {
             }
             steps {
                 script {
-                    def imageTag = "sha-${env.GIT_COMMIT}"
+                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
                     def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
@@ -82,7 +79,7 @@ pipeline {
                             git config user.name "Jenkins"
                             git config user.email "jenkins@example.com"
                             git add kubernetes/deployment.yaml
-                            git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || echo "No changes to commit"
+                            git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || { echo "Failed to commit changes"; exit 1; }
                             git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
                         """
                     }
@@ -93,7 +90,7 @@ pipeline {
         stage('Deploy to Kind') {
             steps {
                 script {
-                    def imageTag = "sha-${env.GIT_COMMIT}"
+                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
@@ -104,6 +101,12 @@ pipeline {
                     """
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker system prune -f' // Clean up unused Docker images
         }
     }
 }
