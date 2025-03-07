@@ -21,9 +21,15 @@ pipeline {
 
                     # Download and install Node.js v22.14.0
                     curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.gz -o node.tar.gz
-                    
                     tar -xzf node.tar.gz -C /usr/local --strip-components=1
                     rm node.tar.gz
+
+                    # Add Node.js to PATH
+                    export PATH="/usr/local/bin:$PATH"
+
+                    # Verify Node.js installation
+                    node -v
+                    npm -v
 
                     # Install the latest npm
                     npm install -g npm@latest
