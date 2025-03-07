@@ -1,17 +1,27 @@
 pipeline {
-    agent { 
-        docker { 
-            image 'node:20' 
-            args '-u root' // Run as root to avoid permission issues
-          } 
+    agent {
+        docker {
+            image 'docker:24.0-dind' // Use a DinD image
+            args '--privileged' // Required for DinD
         }
+    }
 
     environment {
         REGISTRY = 'ghcr.io'
         IMAGE_NAME = "bufic/devsecops-project"
+        NODE_VERSION = '20' // Specify the Node.js version
     }
 
     stages {
+        stage('Setup Environment') {
+            steps {
+                sh '''
+                    apk add --no-cache nodejs npm
+                    npm install -g npm@latest
+                '''
+            }
+        }
+
         stage('Checkout Code') {
             steps {
                 checkout scm
