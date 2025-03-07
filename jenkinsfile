@@ -125,8 +125,13 @@ pipeline {
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
-                        export KUBECONFIG=${env.HOME}/.kube/config
-                        kubectl config use-context $(kubectl config get-contexts -o name | grep kind)
+                        export KUBECONFIG=\${env.HOME}/.kube/config
+                        CONTEXT=\$(kubectl config get-contexts -o name | grep kind)
+                        if [ -z "\$CONTEXT" ]; then
+                            echo "No kind context found!"
+                            exit 1
+                        fi
+                        kubectl config use-context \$CONTEXT
                         kubectl apply -f kubernetes/deployment.yaml || { echo "Deployment failed"; exit 1; }
                     """
                 }
