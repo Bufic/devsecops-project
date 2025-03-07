@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             image 'node:22-alpine'
-            args '-v /var/run/docker.sock:/var/run/docker.sock -u root' // Mount Docker socket and run as root
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v ${env.HOME}/.kube:/root/.kube -u root'
         }
     }
 
@@ -22,11 +22,17 @@ pipeline {
                     apk add --no-cache curl
                     curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
+                    # Install kubectl
+                    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                    chmod +x ./kubectl
+                    mv ./kubectl /usr/local/bin/kubectl
+
                     # Verify installations
                     node -v
                     npm -v
                     docker --version
                     trivy --version
+                    kubectl version --client
                 '''
             }
         }
@@ -75,9 +81,10 @@ pipeline {
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
-                        docker build -t ${fullImageName} .
+                        docker build -t ${fullImageName} . || { echo "Docker build failed"; exit 1; }
                         trivy image --ignore-unfixed --severity CRITICAL,HIGH ${fullImageName} || { echo "Critical or High vulnerabilities found!"; exit 1; }
                         docker push ${fullImageName}
+                        kind load docker-image ${fullImageName}
                     """
                 }
             }
@@ -118,10 +125,9 @@ pipeline {
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
-                        docker pull ${fullImageName}
-                        kind load docker-image ${fullImageName}
-                        sed -i "s|image: ${REGISTRY}/.*|image: ${fullImageName}|g" kubernetes/deployment.yaml
-                        kubectl apply -f kubernetes/deployment.yaml
+                        export KUBECONFIG=${env.HOME}/.kube/config
+                        kubectl config use-context $(kubectl config get-contexts -o name | grep kind)
+                        kubectl apply -f kubernetes/deployment.yaml || { echo "Deployment failed"; exit 1; }
                     """
                 }
             }
@@ -130,7 +136,8 @@ pipeline {
 
     post {
         always {
-            sh 'docker system prune -f' // Clean up unused Docker images
+            sh 'docker image prune -f'
+            sh 'docker container prune -f'
         }
     }
 }
