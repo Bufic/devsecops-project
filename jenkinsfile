@@ -26,10 +26,6 @@ pipeline {
             }
         }
 
-        // Rest of the pipeline stages remain the same
-    }
-
-
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -125,7 +121,7 @@ pipeline {
                 }
             }
         }
-    
+    }
 
     post {
         always {
