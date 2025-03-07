@@ -18,10 +18,15 @@ pipeline {
                     # Install Docker CLI
                     apk add --no-cache docker-cli
 
-                    # Verify Node.js and Docker installations
+                    # Install Trivy
+                    apk add --no-cache curl
+                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+                    # Verify installations
                     node -v
                     npm -v
                     docker --version
+                    trivy --version
                 '''
             }
         }
