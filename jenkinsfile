@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             image 'node:22-alpine'
-            args '-v /var/run/docker.sock:/var/run/docker.sock -v ${env.HOME}/.kube:/root/.kube -u root'
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/bufic/.kube:/root/.kube -u root'
         }
     }
 
@@ -125,7 +125,7 @@ pipeline {
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
-                        export KUBECONFIG=\${env.HOME}/.kube/config
+                        export KUBECONFIG=/root/.kube/config
                         CONTEXT=\$(kubectl config get-contexts -o name | grep kind)
                         if [ -z "\$CONTEXT" ]; then
                             echo "No kind context found!"
@@ -141,8 +141,10 @@ pipeline {
 
     post {
         always {
-            sh 'docker image prune -f'
-            sh 'docker container prune -f'
+            node {
+                sh 'docker image prune -f'
+                sh 'docker container prune -f'
+            }
         }
     }
 }
