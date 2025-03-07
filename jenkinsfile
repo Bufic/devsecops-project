@@ -27,12 +27,18 @@ pipeline {
                     chmod +x ./kubectl
                     mv ./kubectl /usr/local/bin/kubectl
 
+                    # Install kind
+                    curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+                    chmod +x ./kind
+                    mv ./kind /usr/local/bin/kind
+
                     # Verify installations
                     node -v
                     npm -v
                     docker --version
                     trivy --version
                     kubectl version --client
+                    kind version
                 '''
             }
         }
