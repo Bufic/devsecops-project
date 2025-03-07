@@ -19,8 +19,11 @@ pipeline {
                     # Install bash and curl
                     apk add --no-cache bash curl
 
-                    # Install Node.js 20.x (or higher) using Alpine package manager
-                    apk add --no-cache nodejs npm
+                    # Download and install Node.js v22.14.0
+                    curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.gz -o node.tar.gz
+                    
+                    tar -xzf node.tar.gz -C /usr/local --strip-components=1
+                    rm node.tar.gz
 
                     # Install the latest npm
                     npm install -g npm@latest
