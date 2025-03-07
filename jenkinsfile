@@ -90,7 +90,7 @@ pipeline {
                         docker build -t ${fullImageName} . || { echo "Docker build failed"; exit 1; }
                         trivy image --ignore-unfixed --severity CRITICAL,HIGH ${fullImageName} || { echo "Critical or High vulnerabilities found!"; exit 1; }
                         docker push ${fullImageName}
-                        kind load docker-image ${fullImageName}
+                        kind load docker-image ${fullImageName} --name tic-tac-cluster
                     """
                 }
             }
