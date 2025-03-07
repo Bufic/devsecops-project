@@ -15,8 +15,13 @@ pipeline {
     stages {
         stage('Setup Environment') {
             steps {
-                sh '''
-                    apk add --no-cache nodejs npm
+              sh '''
+                    # Install Node.js 20.x (or higher)
+                    apk add --no-cache curl
+                    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+                    apk add --no-cache nodejs
+
+                    # Install the latest npm
                     npm install -g npm@latest
                 '''
             }
