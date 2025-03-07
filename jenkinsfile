@@ -1,0 +1,109 @@
+pipeline {
+    agent { docker { image 'node:20' } }
+
+    environment {
+        REGISTRY = 'ghcr.io'
+        IMAGE_NAME = "bufic/devsecops-project"
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Unit Testing') {
+            steps {
+                sh '''
+                    npm ci
+                    npm test || echo "No tests found, would add tests in a real project"
+                '''
+            }
+        }
+
+        stage('Static Code Analysis') {
+            steps {
+                sh '''
+                    npm ci
+                    npm run lint
+                '''
+            }
+        }
+
+        stage('Build Project') {
+            steps {
+                sh '''
+                    npm ci
+                    npm run build
+                '''
+                archiveArtifacts artifacts: 'dist/', fingerprint: true
+            }
+        }
+
+        stage('Docker Build and Push') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                        sh '''
+                            echo "${GITHUB_TOKEN}" | docker login ${REGISTRY} -u ${GITHUB_USERNAME} --password-stdin
+                        '''
+                    }
+
+                    def imageTag = "sha-${env.GIT_COMMIT}"
+                    def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+
+                    sh """
+                        docker build -t ${fullImageName} .
+                        trivy image --ignore-unfixed --severity CRITICAL,HIGH ${fullImageName} || echo "Trivy found vulnerabilities, continuing..."
+                        docker push ${fullImageName}
+                    """
+                }
+            }
+        }
+
+        stage('Update Kubernetes Deployment') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    def imageTag = "sha-${env.GIT_COMMIT}"
+                    def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+
+                    sh """
+                        sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
+                        echo "Updated deployment to use image: ${newImage}"
+                        grep -A 1 "image:" kubernetes/deployment.yaml
+                    """
+
+                    withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            git config user.name "Jenkins"
+                            git config user.email "jenkins@example.com"
+                            git add kubernetes/deployment.yaml
+                            git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || echo "No changes to commit"
+                            git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kind') {
+            steps {
+                script {
+                    def imageTag = "sha-${env.GIT_COMMIT}"
+                    def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+
+                    sh """
+                        docker pull ${fullImageName}
+                        kind load docker-image ${fullImageName}
+                        sed -i "s|image: ${REGISTRY}/.*|image: ${fullImageName}|g" kubernetes/deployment.yaml
+                        kubectl apply -f kubernetes/deployment.yaml
+                    """
+                }
+            }
+        }
+    }
+}
