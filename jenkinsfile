@@ -24,17 +24,30 @@ pipeline {
                     tar -xzf node.tar.gz -C /usr/local --strip-components=1
                     rm node.tar.gz
 
-                    # Debug: List contents of /usr/local/bin
-                    echo "Contents of /usr/local/bin:"
-                    ls -l /usr/local/bin
+                    # Debug: Check file permissions
+                    echo "Permissions for /usr/local/bin/node:"
+                    ls -l /usr/local/bin/node
+
+                    # Ensure node is executable
+                    chmod +x /usr/local/bin/node
+
+                    # Debug: Verify PATH
+                    echo "PATH: $PATH"
+
+                    # Debug: Check for conflicting node binaries
+                    echo "Locations of node in PATH:"
+                    which -a node || echo "No conflicting node binaries found"
+
+                    # Verify Node.js installation using full path
+                    echo "Node.js version (using full path):"
+                    /usr/local/bin/node -v
 
                     # Add Node.js to PATH
                     export PATH="/usr/local/bin:$PATH"
 
                     # Verify Node.js installation
-                    echo "PATH: $PATH"
+                    echo "Node.js version:"
                     node -v
-                    npm -v
 
                     # Install the latest npm
                     npm install -g npm@latest
