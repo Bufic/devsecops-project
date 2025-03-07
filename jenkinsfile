@@ -1,59 +1,34 @@
 pipeline {
     agent {
         docker {
-            image 'docker:24.0-dind' // Use a DinD image
-            args '--privileged -u root' // Run as root. Required for DinD
+            image 'node:22.14.0-alpine'
+            args '--privileged -u root' // Run as root
         }
     }
 
     environment {
         REGISTRY = 'ghcr.io'
         IMAGE_NAME = "bufic/devsecops-project"
-        NODE_VERSION = '20' // Specify the Node.js version
     }
 
     stages {
         stage('Setup Environment') {
             steps {
-              sh '''
-                    # Install bash and curl
-                    apk add --no-cache bash curl
+                sh '''
+                    # Install Docker CLI
+                    apk add --no-cache docker-cli
 
-                    # Download and install Node.js v22.14.0
-                    curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.gz -o node.tar.gz
-                    tar -xzf node.tar.gz -C /usr/local --strip-components=1
-                    rm node.tar.gz
-
-                    # Debug: Check file permissions
-                    echo "Permissions for /usr/local/bin/node:"
-                    ls -l /usr/local/bin/node
-
-                    # Ensure node is executable
-                    chmod +x /usr/local/bin/node
-
-                    # Debug: Verify PATH
-                    echo "PATH: $PATH"
-
-                    # Debug: Check for conflicting node binaries
-                    echo "Locations of node in PATH:"
-                    which -a node || echo "No conflicting node binaries found"
-
-                    # Verify Node.js installation using full path
-                    echo "Node.js version (using full path):"
-                    /usr/local/bin/node -v
-
-                    # Add Node.js to PATH
-                    export PATH="/usr/local/bin:$PATH"
-
-                    # Verify Node.js installation
-                    echo "Node.js version:"
+                    # Verify Node.js and Docker installations
                     node -v
-
-                    # Install the latest npm
-                    npm install -g npm@latest
+                    npm -v
+                    docker --version
                 '''
             }
         }
+
+        // Rest of the pipeline stages remain the same
+    }
+
 
         stage('Checkout Code') {
             steps {
@@ -150,7 +125,7 @@ pipeline {
                 }
             }
         }
-    }
+    
 
     post {
         always {
