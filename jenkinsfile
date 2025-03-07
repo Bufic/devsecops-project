@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             image 'docker:24.0-dind' // Use a DinD image
-            args '--privileged' // Required for DinD
+            args '--privileged -u root' // Run as root. Required for DinD
         }
     }
 
