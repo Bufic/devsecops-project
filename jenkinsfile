@@ -160,9 +160,9 @@ pipeline {
 
     post {
         always {
-            node {
+            
                 sh 'docker system prune -f'
             }
         }
-    }
+    
 }
