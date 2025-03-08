@@ -1,9 +1,9 @@
 pipeline {
     agent {
-      docker {
-        image 'node:22-bullseye'
-        args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/bufic/.kube:/root/.kube --network host -u root'
-       }
+        docker {
+            image 'node:22-bullseye'
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/bufic/.kube:/root/.kube --network host -u root'
+        }
     }
 
     environment {
@@ -13,35 +13,35 @@ pipeline {
 
     stages {
         stage('Setup Environment') {
-    steps {
-        sh '''
-            # Install Docker CLI
-            apt-get update && apt-get install -y docker.io
+            steps {
+                sh '''
+                    # Install Docker CLI
+                    apt-get update && apt-get install -y docker.io
 
-            # Install Trivy
-            apt-get install -y curl
-            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                    # Install Trivy
+                    apt-get install -y curl
+                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-            # Install kubectl
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-            chmod +x ./kubectl
-            mv ./kubectl /usr/local/bin/kubectl
+                    # Install kubectl
+                    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                    chmod +x ./kubectl
+                    mv ./kubectl /usr/local/bin/kubectl
 
-            # Install kind
-            curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-            chmod +x ./kind
-            mv ./kind /usr/local/bin/kind
+                    # Install kind
+                    curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+                    chmod +x ./kind
+                    mv ./kind /usr/local/bin/kind
 
-            # Verify installations
-            node -v
-            npm -v
-            docker --version
-            trivy --version
-            kubectl version --client
-            kind version
-        '''
-      }
-    }  
+                    # Verify installations
+                    node -v
+                    npm -v
+                    docker --version
+                    trivy --version
+                    kubectl version --client
+                    kind version
+                '''
+            }
+        }
 
         stage('Checkout Code') {
             steps {
@@ -96,9 +96,20 @@ pipeline {
             }
         }
 
+        stage('Debug Branch') {
+            steps {
+                echo "Current branch: ${env.GIT_BRANCH}"
+                echo "BRANCH_NAME: ${env.BRANCH_NAME}"
+                echo "GIT_COMMIT: ${env.GIT_COMMIT}"
+            }
+        }
+
         stage('Update Kubernetes Deployment') {
             when {
-                branch 'main'
+                expression {
+                    echo "Evaluating when condition for branch: ${env.GIT_BRANCH}"
+                    return env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'origin/main' || env.GIT_BRANCH == 'refs/heads/main'
+                }
             }
             steps {
                 script {
