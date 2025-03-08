@@ -1,9 +1,11 @@
 pipeline {
     agent {
-        docker {
-            image 'node:22-bullseye'
-            args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/bufic/.kube:/root/.kube --network host -u root'
-        }
+       docker {
+        image 'node:22-bullseye'
+        args '-v /var/lib/jenkins/workspace/Tic-Tac-Pipeline:/var/lib/jenkins/workspace/Tic-Tac-Pipeline -v /var/run/docker.sock:/var/run/docker.sock -v /home/bufic/.kube:/root/.kube --network host -u root'
+      }
+    }
+
     }
 
     environment {
@@ -156,11 +158,10 @@ pipeline {
                 }
             }
         }
-    }
 
-    // post {
-    //     always {
-    //         sh 'docker system prune -f'
-    //     }
-    // }
+    post {
+        always {
+            sh 'docker system prune -f'
+        }
+    }
 }
