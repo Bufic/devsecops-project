@@ -112,24 +112,26 @@ pipeline {
                 }
             }
             steps {
-                script {
-                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
-                    def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+                dir("${env.WORKSPACE}") {
+                    script {
+                        def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
+                        def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
-                    sh """
-                        sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
-                        echo "Updated deployment to use image: ${newImage}"
-                        grep -A 1 "image:" kubernetes/deployment.yaml
-                    """
-
-                    withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
                         sh """
-                            git config user.name "Jenkins"
-                            git config user.email "jenkins@example.com"
-                            git add kubernetes/deployment.yaml
-                            git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || { echo "Failed to commit changes"; exit 1; }
-                            git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
+                            sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
+                            echo "Updated deployment to use image: ${newImage}"
+                            grep -A 1 "image:" kubernetes/deployment.yaml
                         """
+
+                        withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                            sh """
+                                git config user.name "Jenkins"
+                                git config user.email "jenkins@example.com"
+                                git add kubernetes/deployment.yaml
+                                git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || { echo "Failed to commit changes"; exit 1; }
+                                git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
+                            """
+                        }
                     }
                 }
             }
