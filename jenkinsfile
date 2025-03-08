@@ -4,74 +4,89 @@
 
 
 pipeline {
-    agent none
+    agent none  // No agent is used by default
 
     environment {
         REGISTRY = 'ghcr.io'
         IMAGE_NAME = "bufic/devsecops-project"
+        KUBE_CONTEXT = "kind-tic-tac-cluster"  // Replace with your Kind cluster context
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                checkout scm  // Automatically checks out the code from the Git repository
+                node {
+                    checkout scm  // Automatically checks out the code from the Git repository
+                }
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm ci'  // Install dependencies using clean install
+                node {
+                    sh 'npm ci'  // Install dependencies using clean install
+                }
             }
         }
 
         stage('Unit Testing') {
             steps {
-                sh 'npm test'  // Run unit tests
+                node {
+                    sh 'npm test'  // Run unit tests
+                }
             }
         }
 
         stage('Static Code Analysis') {
             steps {
-                sh 'npm run lint'  // Run linting for static code analysis
+                node {
+                    sh 'npm run lint'  // Run linting for static code analysis
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    def imageTag = "sha-${env.GIT_COMMIT}"  // Use the Git commit hash as the image tag
-                    def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+                node {
+                    script {
+                        def imageTag = "sha-${env.GIT_COMMIT}"  // Use the Git commit hash as the image tag
+                        def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
-                    sh """
-                        docker build -t ${fullImageName} .
-                        docker push ${fullImageName}
-                        kind load docker-image ${fullImageName} --name tic-tac-cluster
-                    """
+                        sh """
+                            docker build -t ${fullImageName} .
+                            docker push ${fullImageName}
+                            kind load docker-image ${fullImageName} --name tic-tac-cluster
+                        """
+                    }
                 }
             }
         }
 
         stage('Update Kubernetes Deployment') {
             steps {
-                script {
-                    def imageTag = "sha-${env.GIT_COMMIT}"
-                    def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+                node {
+                    script {
+                        def imageTag = "sha-${env.GIT_COMMIT}"
+                        def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
-                    sh """
-                        sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
-                        echo "Updated deployment to use image: ${newImage}"
-                    """
+                        sh """
+                            sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
+                            echo "Updated deployment to use image: ${newImage}"
+                        """
+                    }
                 }
             }
         }
 
         stage('Deploy to Kind') {
             steps {
-                script {
-                    sh """
-                        kubectl config use-context kind-tic-tac-cluster
-                        kubectl apply -f kubernetes/deployment.yaml
-                    """
+                node {
+                    script {
+                        sh """
+                            kubectl config use-context ${KUBE_CONTEXT}
+                            kubectl apply -f kubernetes/deployment.yaml
+                        """
+                    }
                 }
             }
         }
@@ -79,7 +94,9 @@ pipeline {
 
     post {
         always {
-            sh 'docker system prune -f'  // Clean up Docker resources
+            node {
+                sh 'docker system prune -f'  // Clean up Docker resources
+            }
         }
     }
 }
