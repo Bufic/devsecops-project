@@ -15,6 +15,10 @@ pipeline {
         stage('Setup Environment') {
             steps {
                 sh '''
+                    # Use a different Alpine mirror
+                    echo "https://dl-4.alpinelinux.org/alpine/v3.21/main" > /etc/apk/repositories
+                    echo "https://dl-4.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/repositories
+                    
                     # Install Docker CLI
                     apk add --no-cache docker-cli
 
