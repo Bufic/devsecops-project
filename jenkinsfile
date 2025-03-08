@@ -1,15 +1,15 @@
 pipeline {
-agent {
-    docker {
-        image 'node:22-bullseye'
-        args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/bufic/.kube:/root/.kube --network host -u root'
+    agent {
+        docker {
+            image 'node:22-bullseye'
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/bufic/.kube:/root/.kube --network host -u root'
         }
     }
-    
 
     environment {
         REGISTRY = 'ghcr.io'
         IMAGE_NAME = "bufic/devsecops-project"
+        GIT_REPO = "https://github.com/Bufic/devsecops-project.git"
     }
 
     stages {
@@ -46,7 +46,10 @@ agent {
 
         stage('Checkout Code') {
             steps {
-                checkout scm
+                sh '''
+                    git clone ${GIT_REPO} .
+                    git checkout ${GIT_COMMIT}
+                '''
             }
         }
 
@@ -84,7 +87,7 @@ agent {
                         '''
                     }
 
-                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
+                    def imageTag = "sha-${env.GIT_COMMIT}"
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
@@ -99,7 +102,7 @@ agent {
 
         stage('Debug Branch') {
             steps {
-                echo "Current branch: ${env.GIT_BRANCH}"
+                echo "Current branch: origin/main"
                 echo "BRANCH_NAME: ${env.BRANCH_NAME}"
                 echo "GIT_COMMIT: ${env.GIT_COMMIT}"
             }
@@ -108,31 +111,28 @@ agent {
         stage('Update Kubernetes Deployment') {
             when {
                 expression {
-                    echo "Evaluating when condition for branch: ${env.GIT_BRANCH}"
                     return env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'origin/main' || env.GIT_BRANCH == 'refs/heads/main'
                 }
             }
             steps {
-                dir("${env.WORKSPACE}") {
-                    script {
-                        def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
-                        def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+                script {
+                    def imageTag = "sha-${env.GIT_COMMIT}"
+                    def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
+                    sh """
+                        sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
+                        echo "Updated deployment to use image: ${newImage}"
+                        grep -A 1 "image:" kubernetes/deployment.yaml
+                    """
+
+                    withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
                         sh """
-                            sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
-                            echo "Updated deployment to use image: ${newImage}"
-                            grep -A 1 "image:" kubernetes/deployment.yaml
+                            git config user.name "Jenkins"
+                            git config user.email "jenkins@example.com"
+                            git add kubernetes/deployment.yaml
+                            git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || { echo "Failed to commit changes"; exit 1; }
+                            git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
                         """
-
-                        withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
-                            sh """
-                                git config user.name "Jenkins"
-                                git config user.email "jenkins@example.com"
-                                git add kubernetes/deployment.yaml
-                                git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || { echo "Failed to commit changes"; exit 1; }
-                                git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
-                            """
-                        }
                     }
                 }
             }
@@ -141,7 +141,7 @@ agent {
         stage('Deploy to Kind') {
             steps {
                 script {
-                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
+                    def imageTag = "sha-${env.GIT_COMMIT}"
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
@@ -159,11 +159,11 @@ agent {
         }
     }
 
-    // post {
-    //     always {
-            
-    //             sh 'docker system prune -f'
-    //         }
-    //     }
-    
+    post {
+        always {
+            node {
+                sh 'docker system prune -f'
+            }
+        }
+    }
 }
