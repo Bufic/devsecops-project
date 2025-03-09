@@ -1,50 +1,88 @@
-// 
-
-
-
-
 pipeline {
-    agent any  // Run on any available agent
+    agent {
+        docker {
+            image 'node:22-bullseye'
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/bufic/.kube:/root/.kube --network host -u root'
+        }
+    }
 
     environment {
         REGISTRY = 'ghcr.io'
         IMAGE_NAME = "bufic/devsecops-project"
-        KUBE_CONTEXT = "kind-tic-tac-cluster"  // Replace with your Kind cluster context
     }
 
     stages {
-        stage('Checkout Code') {
+        stage('Setup Environment') {
             steps {
-                checkout scm  // Automatically checks out the code from the Git repository
+                sh '''
+                    # Install Docker CLI
+                    apt-get update && apt-get install -y docker.io
+
+                    # Install Trivy
+                    apt-get install -y curl
+                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+                    # Install kubectl
+                    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                    chmod +x ./kubectl
+                    mv ./kubectl /usr/local/bin/kubectl
+
+                    # Install kind
+                    curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+                    chmod +x ./kind
+                    mv ./kind /usr/local/bin/kind
+
+                    # Verify installations
+                    node -v
+                    npm -v
+                    docker --version
+                    trivy --version
+                    kubectl version --client
+                    kind version
+                '''
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm ci'  // Install dependencies using clean install
+                sh 'npm ci'
             }
         }
 
         stage('Unit Testing') {
             steps {
-                sh 'npm test'  // Run unit tests
+                sh 'npm test'
             }
         }
 
         stage('Static Code Analysis') {
             steps {
-                sh 'npm run lint'  // Run linting for static code analysis
+                sh 'npm run lint'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Project') {
+            steps {
+                sh 'npm run build'
+                archiveArtifacts artifacts: 'dist/', fingerprint: true
+            }
+        }
+
+        stage('Docker Build and Push') {
             steps {
                 script {
-                    def imageTag = "sha-${env.GIT_COMMIT}"  // Use the Git commit hash as the image tag
+                    withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                        sh '''
+                            echo "${GITHUB_TOKEN}" | docker login ${REGISTRY} -u ${GITHUB_USERNAME} --password-stdin
+                        '''
+                    }
+
+                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
                     def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
                     sh """
-                        docker build -t ${fullImageName} .
+                        docker build -t ${fullImageName} . || { echo "Docker build failed"; exit 1; }
+                        trivy image --ignore-unfixed --severity CRITICAL,HIGH ${fullImageName} || { echo "Critical or High vulnerabilities found!"; exit 1; }
                         docker push ${fullImageName}
                         kind load docker-image ${fullImageName} --name tic-tac-cluster
                     """
@@ -52,16 +90,42 @@ pipeline {
             }
         }
 
-        stage('Update Kubernetes Deployment') {
+        stage('Debug Branch') {
             steps {
-                script {
-                    def imageTag = "sha-${env.GIT_COMMIT}"
-                    def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+                echo "Current branch: ${env.GIT_BRANCH}"
+                echo "BRANCH_NAME: ${env.BRANCH_NAME}"
+                echo "GIT_COMMIT: ${env.GIT_COMMIT}"
+            }
+        }
 
-                    sh """
-                        sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
-                        echo "Updated deployment to use image: ${newImage}"
-                    """
+        stage('Update Kubernetes Deployment') {
+            when {
+                expression {
+                    return env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'origin/main' || env.GIT_BRANCH == 'refs/heads/main'
+                }
+            }
+            steps {
+                dir("${env.WORKSPACE}") {
+                    script {
+                        def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
+                        def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+
+                        sh """
+                            sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
+                            echo "Updated deployment to use image: ${newImage}"
+                            grep -A 1 "image:" kubernetes/deployment.yaml
+                        """
+
+                        withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                            sh """
+                                git config user.name "Jenkins"
+                                git config user.email "jenkins@example.com"
+                                git add kubernetes/deployment.yaml
+                                git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || { echo "Failed to commit changes"; exit 1; }
+                                git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -69,9 +133,18 @@ pipeline {
         stage('Deploy to Kind') {
             steps {
                 script {
+                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
+                    def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+
                     sh """
-                        kubectl config use-context ${KUBE_CONTEXT}
-                        kubectl apply -f kubernetes/deployment.yaml
+                        export KUBECONFIG=/root/.kube/config
+                        CONTEXT=\$(kubectl config get-contexts -o name | grep kind)
+                        if [ -z "\$CONTEXT" ]; then
+                            echo "No kind context found!"
+                            exit 1
+                        fi
+                        kubectl config use-context \$CONTEXT
+                        kubectl apply -f kubernetes/deployment.yaml || { echo "Deployment failed"; exit 1; }
                     """
                 }
             }
@@ -80,7 +153,9 @@ pipeline {
 
     post {
         always {
-            sh 'docker system prune -f'  // Clean up Docker resources
+            node {
+                sh 'docker system prune -f'
+            }
         }
     }
 }
