@@ -107,6 +107,13 @@ pipeline {
             steps {
                 dir("${env.WORKSPACE}") {
                     script {
+                        // Clone the repository
+                        withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                            sh """
+                                git clone https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git .
+                            """
+                        }
+
                         def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
                         def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
@@ -153,8 +160,7 @@ pipeline {
 
     post {
         always {
-
-                sh 'docker system prune -f'
-            }
+            sh 'docker system prune -f'
+        }
     }
 }
