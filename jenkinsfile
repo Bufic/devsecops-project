@@ -118,6 +118,9 @@ pipeline {
                             git config --global user.name "Jenkins"
                             git config --global user.email "jenkins@example.com"
 
+                            # Pull the latest changes to ensure the local repo is up to date
+                            git pull origin main --rebase || echo "No changes to pull"
+
                             git add kubernetes/deployment.yaml
                             git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || echo "No changes to commit"
                             git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
