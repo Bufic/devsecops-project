@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: tic-tac-toe
-        image: ghcr.io/bufic/devsecops-project:sha-b46d69c27fe531719c5e73e9eb445d276ef6ccd1
+        image: ghcr.io/bufic/devsecops-project:sha-3f76c80174c909904dcfe4dc6c7f1f8f3dc14f74
         # image will be automatically updated by the GitHub Actions workflow
         imagePullPolicy: Always
         ports:
