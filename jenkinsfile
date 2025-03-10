@@ -93,32 +93,44 @@ pipeline {
         stage('Update Kubernetes Deployment') {
             steps {
                 script {
-                    def changes = sh(script: 'git diff --name-only HEAD~1 HEAD', returnStdout: true).trim()
-                    if (!changes.contains("kubernetes/deployment.yaml")) {
-                        def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
-                        def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+                    // Check if there is more than one commit in the repo
+                    def hasPreviousCommit = sh(script: 'git rev-parse HEAD~1 >/dev/null 2>&1 && echo "true" || echo "false"', returnStdout: true).trim()
+                    def changes = ""
 
-                        sh """
-                            sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
-                            echo "Updated deployment to use image: ${newImage}"
-                            grep -A 1 "image:" kubernetes/deployment.yaml
-                        """
-
-                        withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
-                            sh """
-                                git config --global --add safe.directory /var/lib/jenkins/workspace/Tic-Tac-Pipeline
-                                git config --global user.name "Jenkins"
-                                git config --global user.email "jenkins@example.com"
-
-                                git pull origin main --rebase || echo "No changes to pull"
-
-                                git add kubernetes/deployment.yaml
-                                git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || echo "No changes to commit"
-                                git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
-                            """
-                        }
+                    if (hasPreviousCommit == "true") {
+                        changes = sh(script: 'git diff --name-only HEAD~1 HEAD', returnStdout: true).trim()
                     } else {
-                        echo "Skipping deployment update as deployment.yaml is already changed."
+                        echo "Only one commit exists, skipping diff check."
+                    }
+
+                    // If changes exist but only 'kubernetes/deployment.yaml' was modified, skip deployment update
+                    if (changes && changes == "kubernetes/deployment.yaml") {
+                        echo "Skipping deployment update as only 'kubernetes/deployment.yaml' was modified."
+                        return
+                    }
+
+                    // Proceed with updating the deployment
+                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
+                    def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+
+                    sh """
+                        sed -i "s|image: ${REGISTRY}/.*|image: ${newImage}|g" kubernetes/deployment.yaml
+                        echo "Updated deployment to use image: ${newImage}"
+                        grep -A 1 "image:" kubernetes/deployment.yaml
+                    """
+
+                    withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            git config --global --add safe.directory /var/lib/jenkins/workspace/Tic-Tac-Pipeline
+                            git config --global user.name "Jenkins"
+                            git config --global user.email "jenkins@example.com"
+
+                            git pull origin main --rebase || echo "No changes to pull"
+
+                            git add kubernetes/deployment.yaml
+                            git commit -m "Update Kubernetes deployment with new image tag: ${imageTag} [skip ci]" || echo "No changes to commit"
+                            git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/Bufic/devsecops-project.git HEAD:main
+                        """
                     }
                 }
             }
