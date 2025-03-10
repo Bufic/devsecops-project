@@ -12,21 +12,6 @@ pipeline {
     }
 
     stages {
-        stage('Check Changed Files') {
-            steps {
-                script {
-                    def changes = sh(script: 'git diff --name-only HEAD~1 HEAD', returnStdout: true).trim()
-                    echo "Changed files:\n${changes}"
-
-                    if (changes == "kubernetes/deployment.yaml") {
-                        echo "Only deployment.yaml changed. Skipping this build to prevent loop."
-                        currentBuild.result = 'SUCCESS'
-                        error("Stopping build to prevent loop.")
-                    }
-                }
-            }
-        }
-
         stage('Setup Environment') {
             steps {
                 sh '''
