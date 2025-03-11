@@ -12,6 +12,19 @@ pipeline {
     }
 
     stages {
+        stage('Check Commit Author') {
+            steps {
+                script {
+                    def commitAuthor = sh(script: "git log -1 --pretty=format:'%an'", returnStdout: true).trim()
+                    if (commitAuthor == "Jenkins" || commitAuthor == "jenkins-bot") {
+                        echo "Commit made by Jenkins, skipping build..."
+                        currentBuild.result = 'ABORTED'
+                        return
+                    }
+                }
+            }
+        }
+
         stage('Setup Environment') {
             steps {
                 sh '''
@@ -82,34 +95,9 @@ pipeline {
             }
         }
 
-        stage('Debug Branch') {
-            steps {
-                echo "Current branch: ${env.GIT_BRANCH}"
-                echo "BRANCH_NAME: ${env.BRANCH_NAME}"
-                echo "GIT_COMMIT: ${env.GIT_COMMIT}"
-            }
-        }
-
         stage('Update Kubernetes Deployment') {
             steps {
                 script {
-                    // Check if there is more than one commit in the repo
-                    def hasPreviousCommit = sh(script: 'git rev-parse HEAD~1 >/dev/null 2>&1 && echo "true" || echo "false"', returnStdout: true).trim()
-                    def changes = ""
-
-                    if (hasPreviousCommit == "true") {
-                        changes = sh(script: 'git diff --name-only HEAD~1 HEAD', returnStdout: true).trim()
-                    } else {
-                        echo "Only one commit exists, skipping diff check."
-                    }
-
-                    // If changes exist but only 'kubernetes/deployment.yaml' was modified, skip deployment update
-                    if (changes && changes == "kubernetes/deployment.yaml") {
-                        echo "Skipping deployment update as only 'kubernetes/deployment.yaml' was modified."
-                        return
-                    }
-
-                    // Proceed with updating the deployment
                     def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
                     def newImage = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
