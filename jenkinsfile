@@ -15,11 +15,19 @@ pipeline {
         stage('Check Commit Author') {
             steps {
                 script {
-                    def commitAuthor = sh(script: "git log -1 --pretty=format:'%an'", returnStdout: true).trim()
+                    // Mark workspace as a safe directory
+                    sh 'git config --global --add safe.directory /var/lib/jenkins/workspace/Tic-Tac-Pipeline'
+
+                    // Get the latest commit author
+                    def commitAuthor = sh(script: 'git log -1 --pretty=format:"%an"', returnStdout: true).trim()
+
+                    echo "Last commit author: ${commitAuthor}"
+
+                    // If the commit was made by Jenkins, abort the build
                     if (commitAuthor == "Jenkins" || commitAuthor == "jenkins-bot") {
                         echo "Commit made by Jenkins, skipping build..."
                         currentBuild.result = 'ABORTED'
-                        return
+                        error("Build aborted due to Jenkins commit")
                     }
                 }
             }
@@ -29,7 +37,7 @@ pipeline {
             steps {
                 sh '''
                     apt-get update && apt-get install -y docker.io curl
-                    
+
                     curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
                     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
