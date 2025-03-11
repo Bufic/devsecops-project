@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tic-tac-app
+  namespace: argocd # ArgoCD is installed in this namespace
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Bufic/devsecops-project.git" # Your GitHub repo
+    targetRevision: main # Branch to track
+    path: kubernetes # Folder where deployment manifests are stored
+  destination:
+    server: https://kubernetes.default.svc # Deploy to the in-cluster Kubernetes
+    namespace: default # Your application's namespace
+  syncPolicy:
+    automated:
+      prune: true # Remove old resources not in Git
+      selfHeal: true # Auto-repair drift
