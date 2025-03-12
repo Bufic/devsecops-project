@@ -204,6 +204,33 @@ Jenkins needs GitHub access to:
 
 Now, whenever you push changes to GitHub, Jenkins will automatically trigger the pipeline!
 
+ps: If using Docker Hub or a private registry, in our case, we are using Github private registry. create a secret like this:
+
+```
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=<REGISTRY_URL> \
+  --docker-username=<USERNAME> \
+  --docker-password=<PASSWORD> \
+  --docker-email=<EMAIL> \
+  -n default
+```
+
+- Replace <REGISTRY_URL> with the actual registry (e.g., docker.io, ghcr.io, 123456789.dkr.ecr.us-east-1.amazonaws.com for AWS ECR).
+- Use your actual username and password for authentication.
+
+ArgoCD needs to be able to pull the image using the secret. Modify your Deployment YAML (deployment.yaml):
+
+```
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+      - name: ghcr-secret
+
+```
+
+This ensures that Kubernetes will use the `ghcr-secret`(you can name it whatever you like) secret when pulling the image.
+
 ---
 
 ### 1. Jenkins as CI (Continuous Integration)
@@ -484,6 +511,13 @@ kubectl get secret -n argocd argocd-initial-admin-secret -o jsonpath="{.data.pas
 
 - This command extracts the encoded admin password and decodes it for use.
 
+PS: To allow ArgoCD to authenticate with the private registry, store the secret in ArgoCD:
+Remember the secret we added to our cluster earlier? yeah. We patch it with ArgoCD.
+
+```
+kubectl patch secret ghcr-secret -n default -p '{"metadata":{"annotations":{"argocd.argoproj.io/secret-type":"repository"}}}'
+```
+
 ---
 
 #### Step 4: Logging into the ArgoCD UI
@@ -586,4 +620,8 @@ If everything works, your application is successfully deployed using ArgoCD!
 Jenkins automates building and pushing images.
 ArgoCD pulls and deploys Kubernetes manifests.
 Any change to deployment.yaml in GitHub triggers an automatic deployment via ArgoCD.
-Your CI/CD pipeline is now fully automated!!
+Your CI/CD pipeline is now fully automated.
+
+---
+
+###### PS: You will notice i commented out the "Deploy to Kind" stage in the pipeline. If you want jenkins to deploy directly to your cluster running locally, you can uncomment that. Jenkins will deploy straight to your cluster without ArgoCD. Meaning you dont have to install ArgoCD.
