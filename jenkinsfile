@@ -132,26 +132,26 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kind') {
-            steps {
-                script {
-                    def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
-                    def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
+        // stage('Deploy to Kind') {
+        //     steps {
+        //         script {
+        //             def imageTag = env.GIT_COMMIT ? "sha-${env.GIT_COMMIT}" : "build-${env.BUILD_ID}"
+        //             def fullImageName = "${REGISTRY}/${IMAGE_NAME}:${imageTag}"
 
-                    sh '''
-                        export KUBECONFIG=/root/.kube/config
-                        CONTEXT=$(kubectl config get-contexts -o name | grep kind || true)
-                        if [ -z "$CONTEXT" ]; then
-                            echo "No kind context found!"
-                            exit 1
-                        fi
-                        kubectl config use-context $CONTEXT
+        //             sh '''
+        //                 export KUBECONFIG=/root/.kube/config
+        //                 CONTEXT=$(kubectl config get-contexts -o name | grep kind || true)
+        //                 if [ -z "$CONTEXT" ]; then
+        //                     echo "No kind context found!"
+        //                     exit 1
+        //                 fi
+        //                 kubectl config use-context $CONTEXT
 
-                        kubectl apply -f kubernetes/ || { echo "Deployment failed"; exit 1; }
-                    '''
-                }
-            }
-        }
+        //                 kubectl apply -f kubernetes/ || { echo "Deployment failed"; exit 1; }
+        //             '''
+        //         }
+        //     }
+        // }
     }
 
     post {
