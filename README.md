@@ -586,4 +586,4 @@ If everything works, your application is successfully deployed using ArgoCD!
 Jenkins automates building and pushing images.
 ArgoCD pulls and deploys Kubernetes manifests.
 Any change to deployment.yaml in GitHub triggers an automatic deployment via ArgoCD.
-Your CI/CD pipeline is now fully automated!
+Your CI/CD pipeline is now fully automated!!
